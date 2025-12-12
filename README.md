@@ -26,3 +26,4 @@ python main.py
 - Changed optimizer to AdamW, better training achieved for higher number of tokens.
 - Previous work discards the majority of large text information ( Problem in encode_text max_len parameter.). Fixed this by ecoding the whole texts, and padding each batch to zero ( Pytorch collate_fn for DataLoader ).
 - Achieved Train accuracy: 92.31% and Validation accuracy: 89.93%
+- Added a platform to using this model. it is not completed yet, I just got it from cloudflare AI builder.
