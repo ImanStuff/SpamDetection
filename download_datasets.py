@@ -55,7 +55,8 @@ def download_and_load_data(
             kaggle_username: str,
             kaggle_key: str
         ):
-    _download_kaggle_dataset(kaggle_username, kaggle_key)
+    if kaggle_username or kaggle_key:
+        _download_kaggle_dataset(kaggle_username, kaggle_key)
     first_df = _download_csv_dataset(INSTAGRAM_DATASET1, f"{DATASET_FOLDER}instagram_dataset1.csv", ["comment_normalized", "thate", "tspam", "tobscene", "tclass"])
     second_df = _download_csv_dataset(INSTAGRAM_DATASET2, f"{DATASET_FOLDER}instagram_dataset2.csv", ["comment_normalized", "thate", "tspam", "tobscene", "tclass"])
     third_df = _download_csv_dataset(SPAM_EMAILS_DATASET, f"{DATASET_FOLDER}spam_emails.csv", None)

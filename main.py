@@ -1,3 +1,4 @@
+import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -5,9 +6,12 @@ import numpy as np
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 
 from download_datasets import *
+
+VOCAB_PATH = 'vocab_to_idx.json'
 
 class Data:
     def __init__(self, kaggle_username: str, kaggle_key: str):
@@ -102,13 +106,11 @@ class SpamDataset(Dataset):
                     self, 
                     texts: np.array, 
                     labels: np.array, 
-                    word_to_idx: dict, 
-                    max_len: int = 50
+                    word_to_idx: dict,
                 ):
             self.texts = texts
             self.labels = labels
             self.word_to_idx = word_to_idx
-            self.max_len = max_len
             self.label_map = {
                 'spam': 1,
                 'clean': 0
@@ -120,10 +122,6 @@ class SpamDataset(Dataset):
         def encode_text(self, text: str):
             tokens = text.split()
             vec = [self.word_to_idx.get(w, self.word_to_idx['<UNK>']) for w in tokens]
-            if len(vec) < self.max_len:
-                vec = vec + [0] * (self.max_len - len(vec))
-            else:
-                vec = vec[:self.max_len]
             return torch.tensor(vec, dtype=torch.long)
 
         def __getitem__(self, idx):
@@ -192,9 +190,8 @@ class TrainAndEvaluate:
             DEVICE: str = 'cuda',
             EPOCHS: int = 50,
         ) -> nn.Module:
-        EMBED_DIM = 100
-        HIDDEN_DIM = 64
         LR = 0.001
+        use_fused = True if DEVICE == 'cuda' else False
 
         model = SpamLSTM(
             vocab_size=vocab_size, 
@@ -202,7 +199,14 @@ class TrainAndEvaluate:
             hidden_dim=hidden_dim
         ).to(DEVICE)
         criterion = torch.nn.BCELoss()
-        optimizer = optim.Adam(model.parameters(), lr=LR)
+        optimizer = optim.AdamW(
+                        model.parameters(), 
+                        lr=LR, 
+                        betas=(0.9, 0.95), 
+                        weight_decay=1e-3, 
+                        eps=1e-6, 
+                        fused=use_fused
+                    )
         best_val_acc = 0
 
         for epoch in range(EPOCHS):
@@ -218,22 +222,20 @@ class TrainAndEvaluate:
                 torch.save(model.state_dict(), 'best_spam_model.pth')
                 print("-> Best model saved!")
         return model
+    
+def collate_fn(batch):
+    inputs = [item['input'] for item in batch]
+    labels = [item['label'] for item in batch]
+    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)
+    labels_stacked = torch.stack(labels)
+    
+    return {
+        'input': inputs_padded,
+        'label': labels_stacked
+    }
 
 
 if __name__ == "__main__":
-    kaggle_username = str(input('Enter your kaggle username: '))
-    kaggle_key = str(input('Enter your kaggle key: '))
-    data = Data(kaggle_username.strip(), kaggle_key.strip())
-    combined_df = data._process_datasets()
-
-    all_text = " ".join(combined_df['comment_normalized'].astype(str).tolist())
-    words = all_text.split()
-    counter = Counter(words)
-    vocab = sorted(counter, key=counter.get, reverse=True)[:20000]
-    word_to_idx = {word: i+1 for i, word in enumerate(vocab)}
-    word_to_idx['<PAD>'] = 0
-    word_to_idx['<UNK>'] = len(word_to_idx)
-
     BATCH_SIZE = 64
     MAX_LEN = 50
     EPOCHS = 50
@@ -244,6 +246,41 @@ if __name__ == "__main__":
     print(f"Device: {DEVICE}")
 
     load_model = True
+    chunk_size = 10 # for inference
+    map_ = {
+            0: "clean",
+            1: "spam"
+        }
+    
+    if not load_model or not os.path.exists(VOCAB_PATH):
+        kaggle_username = None
+        kaggle_key = None
+        if not os.path.exists(os.path.join(DATASET_FOLDER, 'sms_data.txt')):
+            kaggle_username = str(input('Enter your kaggle username: '))
+            kaggle_key = str(input('Enter your kaggle key: '))
+        data = Data(kaggle_username, kaggle_key)
+        combined_df = data._process_datasets()
+        
+        if not os.path.exists(VOCAB_PATH):
+            all_text = " ".join(combined_df['comment_normalized'].astype(str).tolist())
+            words = all_text.split()
+            counter = Counter(words)
+            vocab = sorted(counter, key=counter.get, reverse=True)
+            word_to_idx = {word: i+1 for i, word in enumerate(vocab)}
+            word_to_idx['<PAD>'] = 0
+            word_to_idx['<UNK>'] = len(word_to_idx)
+            with open(VOCAB_PATH, mode='w', encoding='utf-8') as f:
+                json.dump(
+                    word_to_idx,
+                    f,
+                    indent=4
+                )
+        else:
+            with open(VOCAB_PATH, encoding='utf-8') as f:
+                word_to_idx = json.loads(f.read())
+    else:
+        with open(VOCAB_PATH, encoding='utf-8') as f:
+            word_to_idx = json.loads(f.read())
 
     if load_model:
         def encode_text(text):
@@ -262,22 +299,27 @@ if __name__ == "__main__":
             while True:
                 text = str(input("Enter persian spam/clean text: "))
                 encoded = encode_text(text)
-                x = encoded.to(DEVICE).unsqueeze(0)
-                outputs = model(x)
-                predicted = (outputs.squeeze() > 0.7).float()
-                map_ = {
-                    0: "clean",
-                    1: "spam"
+                x = encoded.to(DEVICE)
+                token_chunks = [x[idx: idx + chunk_size] for idx in range(0, x.shape[0], chunk_size)]
+                results = {
+                    0: 0,
+                    1: 0
                 }
-                print(map_[predicted.item()])
+                for chunk in token_chunks:
+                    x = chunk.unsqueeze(0)
+                    outputs = model(x)
+                    predicted = (outputs.squeeze() > 0.6).float()
+                    results[predicted.item()] += 1
+                predicted = 0 if results[0] > results[1] else 1
+                print(map_[predicted])
     else:
         X = combined_df['comment_normalized'].values
         y = combined_df['labels'].values
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-        train_dataset = SpamDataset(X_train, y_train, word_to_idx, MAX_LEN)
-        val_dataset = SpamDataset(X_val, y_val, word_to_idx, MAX_LEN)
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+        train_dataset = SpamDataset(X_train, y_train, word_to_idx)
+        val_dataset = SpamDataset(X_val, y_val, word_to_idx)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+        val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
         train_and_evaluate = TrainAndEvaluate()
 
         model = train_and_evaluate.train(

@@ -19,4 +19,10 @@ pip install -r requirements.txt
 python main.py
 ```
 
-The code achieved 93.51% train accuracy and 90.19 validation accuracy.
+### Updates
+- Increased vocabulary size from 20000 to about 156000 tokens.
+- Added mechanism to load data if they are exist.
+- Saving vocab indexes.
+- Changed optimizer to AdamW, better training achieved for higher number of tokens.
+- Previous work discards the majority of large text information ( Problem in encode_text max_len parameter.). Fixed this by ecoding the whole texts, and padding each batch to zero ( Pytorch collate_fn for DataLoader ).
+- Achieved Train accuracy: 92.31% and Validation accuracy: 89.93%
