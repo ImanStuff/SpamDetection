@@ -20,10 +20,6 @@ python main.py
 ```
 
 ### Updates
-- Increased vocabulary size from 20000 to about 156000 tokens.
-- Added mechanism to load data if they are exist.
-- Saving vocab indexes.
-- Changed optimizer to AdamW, better training achieved for higher number of tokens.
-- Previous work discards the majority of large text information ( Problem in encode_text max_len parameter.). Fixed this by ecoding the whole texts, and padding each batch to zero ( Pytorch collate_fn for DataLoader ).
-- Achieved Train accuracy: 92.31% and Validation accuracy: 89.93%
-- Added a platform to using this model. it is not completed yet, I just got it from cloudflare AI builder.
+- Added two new handcrafted datasets.
+- Increased vocabulary size from 156000 to about 180000 tokens.
+- Achieved Train Accuracy: 92.86% and Validation Accuracy: 90.02%

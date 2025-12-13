@@ -23,7 +23,9 @@ class Data:
             first_df, 
             second_df, 
             third_df, 
-            spam_sms_df
+            spam_sms_df,
+            persian_ads1,
+            persian_ads2
         ) = download_and_load_data(self.kaggle_username, self.kaggle_key)
         target_classes = ['spam', 'spamobscene', 'hate', 'hateobscene', 'obscene']
         spam_first_df = first_df[first_df['tclass'].isin(target_classes)]
@@ -56,9 +58,16 @@ class Data:
         clean_third_df = third_df[third_df['labels'].isin(['ham'])]
 
         spam_df = pd.concat(
-            [spam_first_df[['comment_normalized']], spam_second_df[['comment_normalized']], spam_third_df[['comment_normalized']], spam_sms_df[['comment_normalized']]],
-            ignore_index=True
-        )
+                [
+                    spam_first_df[['comment_normalized']], 
+                    spam_second_df[['comment_normalized']], 
+                    spam_third_df[['comment_normalized']], 
+                    spam_sms_df[['comment_normalized']],
+                    persian_ads1[['comment_normalized']],
+                    persian_ads2[['comment_normalized']]
+            ],
+                ignore_index=True
+            )
         clean_df = pd.concat(
             [clean_first_df[['comment_normalized']], clean_second_df[['comment_normalized']], clean_third_df[['comment_normalized']]],
                 ignore_index=True

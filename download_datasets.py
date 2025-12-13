@@ -60,7 +60,9 @@ def download_and_load_data(
     first_df = _download_csv_dataset(INSTAGRAM_DATASET1, f"{DATASET_FOLDER}instagram_dataset1.csv", ["comment_normalized", "thate", "tspam", "tobscene", "tclass"])
     second_df = _download_csv_dataset(INSTAGRAM_DATASET2, f"{DATASET_FOLDER}instagram_dataset2.csv", ["comment_normalized", "thate", "tspam", "tobscene", "tclass"])
     third_df = _download_csv_dataset(SPAM_EMAILS_DATASET, f"{DATASET_FOLDER}spam_emails.csv", None)
-    spam_sms_df = pd.read_csv("Data/sms_data.txt", encoding='utf-16', header=None, names=["comment_normalized"])
+    spam_sms_df = pd.read_csv(DATASET_FOLDER + "sms_data.txt", encoding='utf-16', header=None, names=["comment_normalized"])
     spam_sms_df = spam_sms_df.replace(r'\t+', '', regex=True)
+    persiand_ads1 = pd.read_csv(DATASET_FOLDER + "persian_ads_1.csv", encoding='utf-16', header=None, names=["file_source", "message_id", "date", "sender", "comment_normalized", 'score'])
+    persiand_ads2 = pd.read_csv(DATASET_FOLDER + "persian_ads_2.csv", encoding='utf-16', header=None, names=["comment_normalized", 'label'])
 
-    return first_df, second_df, third_df, spam_sms_df
+    return first_df, second_df, third_df, spam_sms_df, persiand_ads1, persiand_ads2
